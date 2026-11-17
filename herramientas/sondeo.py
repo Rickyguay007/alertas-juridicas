@@ -19,19 +19,15 @@ todo = get(BASE + [s for s in src if "main" in s][0]).text
 for cid, h in re.findall(r'(\d+):"([0-9a-f]{12,20})"', rt):
     todo += "\n" + get(f"{BASE}{cid}.{h}.js").text
 
-print("API STRINGS:")
-for s in sorted(set(re.findall(r'["\'`]([^"\'`\s]*api/v\d[^"\'`\s]*)["\'`]', todo)))[:80]:
-    print("  ", s)
-print("CODIGOS:")
-for s in sorted(set(re.findall(r'["\'`](\d{2,3}_[A-Z0-9_]{3,40})["\'`]', todo)))[:120]:
-    print("  ", s)
-for patron in [r"postRequest\(", r"getRequest\(", r"basePath\s*=", r"storage/api"]:
+vistos = set()
+for patron in [r"API_ENDPOINT\+", r"API_CONTEXT\.SENTENCIA", r"textoBusqueda|txtBusqueda|criterio\s*:|pagina\s*:|numeroPagina|registrosPorPagina|tamanio"]:
     n = 0
     for m in re.finditer(patron, todo):
-        ctx = todo[max(0, m.start()-250): m.end()+250].replace("\n", " ")
-        if "encodeParams" in ctx and patron.startswith("postRequest"):
+        clave = m.start() // 400
+        if clave in vistos:
             continue
-        print(f"  CTX[{patron}]:", ctx)
+        vistos.add(clave)
+        print(f"  CTX[{patron[:25]}]:", todo[max(0, m.start()-350): m.end()+450].replace("\n", " "))
         n += 1
-        if n >= 10:
+        if n >= 14:
             break
