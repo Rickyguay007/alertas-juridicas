@@ -424,6 +424,17 @@ def listar_posts(texto_html, base_url, tipo_esperado=None):
     return unicos
 
 
+def singular_tipo(texto):
+    """'ediciones constitucionales' -> 'edicion constitucional'."""
+    t = norm(texto)
+    for canonico, raiz in [("suplemento", "suplemento"), ("registro oficial", "registro"),
+                           ("edicion constitucional", "constitucional"), ("edicion juridica", "juridica"),
+                           ("edicion especial", "especial")]:
+        if raiz in t:
+            return canonico
+    return t
+
+
 def mapa_pdfs(texto_html):
     """De la página de producto: clave de edición -> (enlace al PDF, fecha)."""
     s = sopa(texto_html)
@@ -447,9 +458,10 @@ def mapa_pdfs(texto_html):
                     numero = m.group(1)
             if tipo_ordinal is None:
                 m = re.search(r"(?:(primer|segundo|tercer|cuarto|quinto|sexto|septimo|octavo|noveno|decimo)\s+)?"
-                              r"(suplemento|registro oficial|edicion constitucional|edicion juridica|edicion especial)\b", n)
+                              r"(suplementos?|registros? oficial(?:es)?|edicion(?:es)? constitucional(?:es)?|"
+                              r"edicion(?:es)? juridicas?|edicion(?:es)? especial(?:es)?)\b", n)
                 if m and "pagina" not in n:
-                    tipo_ordinal = (m.group(2), m.group(1) or "primer")
+                    tipo_ordinal = (singular_tipo(m.group(2)), m.group(1) or "primer")
             if numero and tipo_ordinal:
                 break
         if numero and tipo_ordinal:
@@ -893,7 +905,11 @@ def revisar_cc_web(estado, primera_vez, resultado):
     vistos = set(estado.get("vistos", {}).get("cc_web", []))
     nuevos_ids = []
     try:
-        raiz = ET.fromstring(descargar(CC_FEED).strip().encode("utf-8"))
+        crudo = descargar(CC_FEED)
+        inicio, fin = crudo.find("<rss"), crudo.rfind("</rss>")
+        if inicio == -1 or fin == -1:
+            raise RuntimeError("la página no publica un feed RSS")
+        raiz = ET.fromstring(crudo[inicio:fin + len("</rss>")].encode("utf-8"))
         entradas = raiz.findall("./channel/item")
         if not entradas:
             raise RuntimeError("el feed no trae publicaciones")
@@ -1061,7 +1077,7 @@ def guardar_estado(estado, resultado, ahora):
 
 def principal():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    modo_prueba = "--prueba" in sys.argv
+    modo_prueba = "--prueba" in sys.argv or os.environ.get("MODO", "").lower() == "prueba"
     modo_diag = "--diagnostico" in sys.argv or os.environ.get("MODO", "").lower() == "diagnostico"
 
     estado = cargar_estado()

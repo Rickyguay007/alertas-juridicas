@@ -8,13 +8,14 @@ on:
   workflow_dispatch:
     inputs:
       modo:
-        description: "normal = boletín · diagnostico = informe de qué pudo leer de cada fuente"
+        description: "normal = boletín · diagnostico = informe de cada fuente · prueba = muestra el boletín en el registro sin enviarlo"
         required: false
         default: "normal"
         type: choice
         options:
           - normal
           - diagnostico
+          - prueba
 
 permissions:
   contents: write
@@ -48,7 +49,7 @@ jobs:
         run: python alertas.py
 
       - name: Guardar lo ya avisado
-        if: ${{ github.event.inputs.modo != 'diagnostico' }}
+        if: ${{ github.event.inputs.modo != 'diagnostico' && github.event.inputs.modo != 'prueba' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
