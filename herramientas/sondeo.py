@@ -16,9 +16,9 @@ rt = get(BASE + [s for s in src if "runtime" in s][0]).text
 todo = get(BASE + [s for s in src if "main" in s][0]).text
 for cid, h in re.findall(r'(\d+):"([0-9a-f]{12,20})"', rt):
     todo += "\n" + get(f"{BASE}{cid}.{h}.js").text
-for patron in [r"resetPaginacion\(\)\{", r"criterioBusqueda=\{", r"criterioBusqueda=new"]:
-    for m in list(re.finditer(patron, todo))[:2]:
-        print(f"CTX[{patron}]:", todo[m.start(): m.end()+900].replace("\n", " "))
+for patron in [r"metadata", r"this\.criterioBusqueda=", r"criterioBusqueda\.subBusqueda", r"criterioBusqueda\.textoSentencia="]:
+    for m in list(re.finditer(patron, todo))[:4]:
+        print(f"CTX[{patron}]:", todo[max(0, m.start()-400): m.end()+700].replace("\n", " "))
 
 def cifrar(v):
     return json.dumps({"dato": base64.b64encode(quote(json.dumps(v, separators=(",", ":"), ensure_ascii=False), safe="-_.!~*'()").encode()).decode()})
@@ -26,9 +26,9 @@ def cifrar(v):
 url = BASE + "rest/api/sentencia/100_BUSCR_SNTNCIA"
 for criterio in [
     {"textoSentencia": "impuesto a la renta", "numSentencia": "", "numeroCausa": "", "sort": "relevancia",
-     "paginacion": {"pagina": 1, "registros": 5, "contar": True, "total": 0}, "tipoAcciones": [], "jueces": [], "decisiones": []},
+     "paginacion": {"page": 1, "pageSize": 5, "total": 0, "contar": True}, "tipoAcciones": [], "jueces": [], "decisiones": []},
     {"textoSentencia": "", "numSentencia": "1964-22-EP/26", "numeroCausa": "", "sort": "desc",
-     "paginacion": {"pagina": 1, "registros": 5, "contar": True, "total": 0}, "tipoAcciones": [], "jueces": [], "decisiones": []},
+     "paginacion": {"page": 1, "pageSize": 5, "total": 0, "contar": True}, "tipoAcciones": [], "jueces": [], "decisiones": []},
 ]:
     r = S.post(url, data=cifrar(criterio), headers={"Content-Type": "application/json; charset=utf-8",
                                                     "Origin": "https://buscador.corteconstitucional.gob.ec",
