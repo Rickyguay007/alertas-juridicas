@@ -1,0 +1,41 @@
+name: Consultas del bot
+
+on:
+  schedule:
+    # Cada 20 minutos de 6:00 a 22:40 hora de Ecuador (11:00–03:40 UTC).
+    - cron: "*/20 11-23 * * *"
+    - cron: "*/20 0-3 * * *"
+  workflow_dispatch:
+    inputs:
+      consulta:
+        description: "Prueba una búsqueda sin Telegram (se muestra en el registro). Déjalo vacío para leer los mensajes."
+        required: false
+        default: ""
+
+concurrency:
+  group: consultas
+  cancel-in-progress: false
+
+jobs:
+  responder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar librerías
+        run: pip install -r requirements.txt
+
+      - name: Leer mensajes y responder
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          CONSULTA: ${{ github.event.inputs.consulta }}
+        run: python consultas.py

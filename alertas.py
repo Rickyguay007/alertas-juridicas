@@ -339,6 +339,7 @@ class Novedad:
     actores: str = ""
     tipo_causa: str = ""
     etiqueta: str = ""
+    detalle: str = ""       # p. ej. "⚖️ Desestimar · Ponente: Karla Andrade"
 
 
 @dataclass
@@ -348,6 +349,117 @@ class Resultado:
     omitidas: int = 0
     diagnostico: list = field(default_factory=list)     # (fuente, ok, detalle)
     errores: list = field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Buscador de la Corte Constitucional (sentencias con resumen, decisión y partes)
+# ---------------------------------------------------------------------------
+
+CC_BUSCADOR = "https://buscador.corteconstitucional.gob.ec/buscador-externo/"
+CC_PDF = "https://esacc.corteconstitucional.gob.ec/storage/api/v1/10_DWL_FL/"
+RE_SENTENCIA_CC = re.compile(r"^\d{1,4}-\d{2}-[A-Z]{2,3}/\d{2}$")
+RE_CAUSA_CC = re.compile(r"^\d{1,4}-\d{2}-[A-Z]{2,3}$")
+
+
+def _cc_post(ruta, cuerpo):
+    """El buscador espera el JSON codificado en base64 dentro de {"dato": ...}."""
+    import base64
+    from urllib.parse import quote
+    texto = json.dumps(cuerpo, separators=(",", ":"), ensure_ascii=False)
+    datos = json.dumps({"dato": base64.b64encode(quote(texto, safe="-_.!~*'()").encode()).decode()})
+    r = SESION.post(CC_BUSCADOR + "rest/api/" + ruta, data=datos, timeout=45, headers={
+        "Content-Type": "application/json; charset=utf-8",
+        "Origin": "https://buscador.corteconstitucional.gob.ec", "Referer": CC_BUSCADOR + "principal"})
+    r.raise_for_status()
+    return r.json()
+
+
+def cc_buscar(texto="", num_sentencia="", num_causa="", pagina=1, por_pagina=5):
+    """Devuelve (total, [resoluciones]) del buscador de sentencias de la Corte Constitucional."""
+    criterio = {"numSentencia": num_sentencia, "numeroCausa": num_causa, "textoSentencia": texto, "motivo": "",
+                "metadata": "", "subBusqueda": "", "tipoLegitimado": 0, "legitimados": "", "tipoAcciones": [],
+                "materias": [], "intereses": [], "decisiones": [], "jueces": [], "derechoDemandado": [],
+                "derechosTratado": [], "derechosVulnerado": [], "temaEspecificos": [], "conceptos": [],
+                "fechaNotificacion": "", "fechaDecision": "", "sort": "relevancia" if texto else "desc",
+                "precedenteAprobado": "", "precedentePropuesto": "", "tipoNormas": [], "asuntos": [],
+                "analisisMerito": "", "novedad": "", "merito": "",
+                "paginacion": {"page": pagina, "pageSize": por_pagina, "total": 0, "contar": True}}
+    datos = _cc_post("sentencia/100_BUSCR_SNTNCIA", criterio)
+    return datos.get("totalFilas") or 0, [d.get("resolucion") or {} for d in (datos.get("dato") or [])]
+
+
+def cc_legitimados(id_causa):
+    """{'activos': [...], 'pasivos': [...]} de una causa."""
+    salida = {"activos": [], "pasivos": []}
+    if not id_causa:
+        return salida
+    for p in _cc_post("expedienteLegitimado/100_EXPEDNTE_LGTMDO", {"id": id_causa}).get("dato") or []:
+        tipo = norm((p.get("tipoLegitimado") or {}).get("nombre", ""))
+        nombre = limpiar(p.get("nombreCompleto", ""))
+        if not nombre:
+            continue
+        if "activo" in tipo:
+            salida["activos"].append(nombre)
+        elif "pasivo" in tipo:
+            salida["pasivos"].append(nombre)
+    return salida
+
+
+def cc_pdf(resolucion):
+    import base64
+    for doc in resolucion.get("documento") or []:
+        if doc.get("repositorio") == "HDFS" and doc.get("uuid"):
+            ruta = json.dumps({"carpeta": doc.get("carpeta"), "uuid": doc["uuid"]}, separators=(",", ":"))
+            return CC_PDF + base64.b64encode(ruta.encode()).decode()
+        if str(doc.get("uuid", "")).startswith("http"):
+            return doc["uuid"]
+    return ""
+
+
+def cc_ficha(resolucion, con_partes=True):
+    """Datos listos para mostrar de una resolución del buscador."""
+    causa = (resolucion.get("causa") or [{}])[0]
+    fecha = ""
+    if resolucion.get("fechadecision"):
+        fecha = dt.datetime.fromtimestamp(resolucion["fechadecision"] / 1000, ZONA_EC).strftime("%d/%m/%Y")
+    partes = {"activos": [], "pasivos": []}
+    if con_partes:
+        try:
+            partes = cc_legitimados(resolucion.get("idcausa"))
+        except Exception:  # noqa: BLE001
+            pass
+    activos = partes["activos"]
+    return {
+        "numero": resolucion.get("numero", ""),
+        "tipo": (causa.get("tipoaccion") or "").capitalize(),
+        "fecha": fecha,
+        "decision": ", ".join(d.get("resumendecision", "").capitalize() for d in resolucion.get("decision") or [] if d.get("resumendecision")),
+        "juez": ", ".join(titulo_institucion(j.get("nombrecompleto", "")) for j in resolucion.get("juez") or []),
+        "motivo": limpiar(resolucion.get("motivo") or ""),
+        "accionante": ", ".join(activos[:2]) + (f" y {len(activos) - 2} más" if len(activos) > 2 else ""),
+        "pdf": cc_pdf(resolucion),
+    }
+
+
+def ro_buscar(texto):
+    """Búsqueda del sitio del Registro Oficial: [{edicion, numero, fecha, extracto, pdf}]."""
+    from urllib.parse import quote_plus
+    s = sopa(descargar(f"{RO_BASE}/?s={quote_plus(texto)}"))
+    resultados = []
+    for tarjeta in s.select(".card__item_post_imagen_search"):
+        def texto_de(selector):
+            el = tarjeta.select_one(selector)
+            return limpiar(el.get_text(" ")) if el else ""
+        parrafos = [limpiar(p.get_text(" ")) for p in tarjeta.select("p.txt_fecha_post_imagen")]
+        enlace = tarjeta.select_one("a.cta_post_imagen_search, a[href]")
+        resultados.append({
+            "edicion": texto_de(".card__title_post_imagen"),
+            "numero": texto_de(".card__title_numero_imagen"),
+            "fecha": parrafos[0] if parrafos else "",
+            "extracto": limpiar((parrafos[-1] if len(parrafos) > 2 else "").lstrip(".… ")),
+            "pdf": enlace["href"] if enlace else "",
+        })
+    return resultados
 
 
 # ---------------------------------------------------------------------------
@@ -725,11 +837,39 @@ def novedades_constitucional(items, origen, enlace, resultado):
             institucion = "Corte Constitucional – Sala de Admisión"
             if not resumen:
                 resumen = "Demanda admitida a trámite"
-        resultado.novedades.append(Novedad(
+        nov = Novedad(
             seccion="cc", institucion=institucion, numero=codigo or titulo_institucion(it["tipo"]),
             resumen=recortar(resumen or texto, 300),
             materia=clasificar_materia(texto, defecto="Constitucional"),
-            enlace=enlace, origen=origen, actores=actores, tipo_causa=tipo_causa))
+            enlace=enlace, origen=origen, actores=actores, tipo_causa=tipo_causa)
+        if RE_SENTENCIA_CC.match(codigo or ""):
+            enriquecer_con_buscador(nov, codigo)
+        resultado.novedades.append(nov)
+
+
+def enriquecer_con_buscador(nov, numero):
+    """Completa la sentencia con el resumen, la decisión, el ponente y el accionante del buscador de la Corte."""
+    try:
+        _, encontrados = cc_buscar(num_sentencia=numero, por_pagina=1)
+        if not encontrados:
+            return
+        ficha = cc_ficha(encontrados[0])
+        if ficha["motivo"]:
+            nov.resumen = recortar(ficha["motivo"], 420)
+            nov.materia = clasificar_materia(ficha["motivo"], defecto="Constitucional")
+        if ficha["accionante"] and not nov.actores:
+            nov.actores = ficha["accionante"]
+        detalle = []
+        if ficha["decision"]:
+            detalle.append(f"⚖️ {ficha['decision']}")
+        if ficha["juez"]:
+            detalle.append(f"Ponente: {ficha['juez']}")
+        nov.detalle = " · ".join(detalle)
+        if ficha["pdf"]:
+            nov.enlace = ficha["pdf"]
+        time.sleep(0.5)
+    except Exception as e:  # noqa: BLE001
+        log.warning("No pude completar %s con el buscador de la Corte: %s", numero, e)
 
 
 def novedades_juridica(lineas, origen, enlace, resultado):
@@ -1021,6 +1161,8 @@ def bloque(nov):
     lineas.append(f"📌 <b>{esc(nov.numero)}</b>" + (f" · {esc(nov.tipo_causa)}" if nov.tipo_causa else ""))
     if nov.actores:
         lineas.append(f"👤 Accionante: {esc(nov.actores)}")
+    if nov.detalle:
+        lineas.append(esc(nov.detalle))
     lineas.append(f"📝 {esc(nov.resumen)}")
     lineas.append(f"🏷️ Materia: {esc(nov.materia)}")
     es_pdf = "esacc.corteconstitucional" in nov.enlace or nov.enlace.lower().endswith(".pdf")
