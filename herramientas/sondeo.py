@@ -13,20 +13,25 @@ def get(url):
         return S.get(url, timeout=40, verify=False)
 
 html = get(BASE + "principal").text
-runtime = [s for s in re.findall(r'src="([^"]+)"', html) if "runtime" in s][0]
-rt = get(BASE + runtime).text
-print("RUNTIME:", rt[:200])
-mapa = re.findall(r'(\d+):"([0-9a-f]{12,20})"', rt)
-print("CHUNKS:", mapa[:40])
-todo = get(BASE + [s for s in re.findall(r'src="([^"]+)"', html) if "main" in s][0]).text
-for cid, h in mapa[:40]:
-    js = get(f"{BASE}{cid}.{h}.js").text
-    todo += "\n" + js
-    print("chunk", cid, len(js))
-for patron in [r"https?://[a-zA-Z0-9.\-]+\.gob\.ec[^\"'`\s]*", r"recaptcha|captcha", r"\.post\(", r"apiUrl|urlApi|URL_|environment\.[a-zA-Z]+"]:
-    vistos = 0
-    for m in re.finditer(patron, todo, re.I):
-        print(f"  CTX[{patron[:20]}]:", todo[max(0, m.start()-200): m.end()+400].replace("\n", " "))
-        vistos += 1
-        if vistos >= 6:
+src = re.findall(r'src="([^"]+)"', html)
+rt = get(BASE + [s for s in src if "runtime" in s][0]).text
+todo = get(BASE + [s for s in src if "main" in s][0]).text
+for cid, h in re.findall(r'(\d+):"([0-9a-f]{12,20})"', rt):
+    todo += "\n" + get(f"{BASE}{cid}.{h}.js").text
+
+print("API STRINGS:")
+for s in sorted(set(re.findall(r'["\'`]([^"\'`\s]*api/v\d[^"\'`\s]*)["\'`]', todo)))[:80]:
+    print("  ", s)
+print("CODIGOS:")
+for s in sorted(set(re.findall(r'["\'`](\d{2,3}_[A-Z0-9_]{3,40})["\'`]', todo)))[:120]:
+    print("  ", s)
+for patron in [r"postRequest\(", r"getRequest\(", r"basePath\s*=", r"storage/api"]:
+    n = 0
+    for m in re.finditer(patron, todo):
+        ctx = todo[max(0, m.start()-250): m.end()+250].replace("\n", " ")
+        if "encodeParams" in ctx and patron.startswith("postRequest"):
+            continue
+        print(f"  CTX[{patron}]:", ctx)
+        n += 1
+        if n >= 10:
             break
