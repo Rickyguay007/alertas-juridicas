@@ -1,0 +1,57 @@
+name: Alertas jurídicas
+
+on:
+  schedule:
+    # 13:15 UTC = 8:15 en Ecuador. GitHub suele tardar unos minutos en arrancar,
+    # así que el mensaje llega alrededor de las 8:30.
+    - cron: "15 13 * * *"
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "normal = boletín · diagnostico = informe de qué pudo leer de cada fuente"
+        required: false
+        default: "normal"
+        type: choice
+        options:
+          - normal
+          - diagnostico
+
+permissions:
+  contents: write
+
+concurrency:
+  group: alertas
+  cancel-in-progress: false
+
+jobs:
+  boletin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar librerías
+        run: pip install -r requirements.txt
+
+      - name: Revisar fuentes y enviar a Telegram
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MODO: ${{ github.event.inputs.modo || 'normal' }}
+        run: python alertas.py
+
+      - name: Guardar lo ya avisado
+        if: ${{ github.event.inputs.modo != 'diagnostico' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add estado.json
+          git diff --cached --quiet || git commit -m "Boletín $(date -u +%Y-%m-%d)"
+          git push
