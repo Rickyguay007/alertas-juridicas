@@ -89,6 +89,8 @@ RUIDO = [
     "disuelta y liquidada", "en liquidacion", "perito", "se designa", "subroga",
     "convenio basico de funcionamiento", "campana nacional estrategica de vacunacion",
     "periodos de veda", "embarcaciones pesqueras", "parque automotor",
+    "especificacion tecnica ecuatoriana", "ete inen", "se conoce el contenido del informe",
+    "informe de actividades",
 ]
 
 # Si la institución no es prioritaria, solo se avisa si el texto tiene alguna de estas palabras.
@@ -299,6 +301,8 @@ SIGLAS = {"SRI", "SENAE", "SERCOP", "IESS", "BIESS", "ARCSA", "ARCOTEL", "ARCONE
 def titulo_institucion(nombre):
     """MINISTERIO DE ECONOMÍA -> Ministerio de Economía (respeta las siglas conocidas)."""
     nombre = limpiar(nombre).rstrip(":").strip()
+    # El sitio a veces pega palabras: "MINISTERIODE AMBIENTE"
+    nombre = re.sub(r"\b(MINISTERIO|AGENCIA|SERVICIO|SECRETAR[IÍ]A|SUPERINTENDENCIA|CONSEJO|INSTITUTO)(DEL|DE)\b", r"\1 \2", nombre)
     if not nombre:
         return ""
     menores = {"de", "del", "la", "las", "lo", "los", "y", "e", "el", "en", "para", "por", "a", "al"}
@@ -690,11 +694,22 @@ def novedades_constitucional(items, origen, enlace, resultado):
 def novedades_juridica(lineas, origen, enlace, resultado):
     """Edición Jurídica: agrupa los números de juicio por sala."""
     grupos, sala = {}, "Corte Nacional de Justicia"
+    cabecera = None  # nombre de sala que puede venir partido en varias líneas
     for linea in lineas:
         n = norm(linea)
-        if ("sala" in n or "tribunal" in n or "corte nacional" in n) and es_mayusculas(linea) and not re.search(r"\d{4}", linea):
-            sala = titulo_institucion(linea)
+        if es_mayusculas(linea) and not re.search(r"\d{4}", linea):
+            if cabecera is not None and not cabecera.endswith(":") \
+                    and not n.startswith(("resolucion", "sentencia", "juicio", "autos", "funcion", "corte ")):
+                cabecera += " " + linea
+                sala = titulo_institucion(cabecera)
+                continue
+            if "sala" in n or "tribunal" in n or "corte nacional" in n:
+                cabecera = linea
+                sala = titulo_institucion(linea)
+                continue
+            cabecera = None
             continue
+        cabecera = None
         juicios = re.findall(r"J?(\d{5}-\d{4}-\d{3,5}[A-Z]?)", linea)
         if juicios:
             grupos.setdefault(sala, [])
@@ -702,6 +717,7 @@ def novedades_juridica(lineas, origen, enlace, resultado):
                 if j not in grupos[sala]:
                     grupos[sala].append(j)
     for sala, juicios in grupos.items():
+        sala = re.sub(r"^Corte Nacional de Justicia\s+(?=Sala)", "", sala)
         lista = ", ".join(juicios[:8]) + (f" y {len(juicios) - 8} más" if len(juicios) > 8 else "")
         resultado.novedades.append(Novedad(
             seccion="cnj", institucion=sala if "corte" in norm(sala) or "tribunal" in norm(sala) else f"Corte Nacional – {sala}",
