@@ -44,6 +44,7 @@ Escríbeme lo que necesitas y te respondo en unos minutos (reviso los mensajes c
    • <code>/ro NAC-DGERCGC26-00000021</code>
    • <code>/ro catamayo patentes</code>
    • <code>/ro 17811-2018-00449</code> (fallos de la Corte Nacional publicados en la Edición Jurídica)
+   En el Registro Oficial funcionan mejor los números o 1 a 3 palabras clave.
 
 ✍️ Si escribes sin comando, busco en las dos.
 ➡️ Para ver más resultados, <b>responde</b> a mi mensaje con la palabra <b>más</b>.
@@ -74,7 +75,7 @@ def buscar_cc(consulta, pagina=1):
     if not res:
         lineas.append("\n😕 No encontré sentencias con esa búsqueda. Prueba con otras palabras o con el número del caso.")
         return lineas, False
-    for i, r in enumerate(res):
+    for i, r in enumerate(res[:POR_PAGINA]):
         f = alertas.cc_ficha(r)
         bloque = [f"\n{NUMEROS[i]} <b>{esc(f['numero'])}</b>" + (f" · {esc(f['tipo'])}" if f["tipo"] else "")]
         datos = " · ".join(x for x in [f"📅 {f['fecha']}" if f["fecha"] else "",

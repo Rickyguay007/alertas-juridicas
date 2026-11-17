@@ -383,9 +383,15 @@ def cc_buscar(texto="", num_sentencia="", num_causa="", pagina=1, por_pagina=5):
                 "fechaNotificacion": "", "fechaDecision": "", "sort": "relevancia" if texto else "desc",
                 "precedenteAprobado": "", "precedentePropuesto": "", "tipoNormas": [], "asuntos": [],
                 "analisisMerito": "", "novedad": "", "merito": "",
-                "paginacion": {"page": pagina, "pageSize": por_pagina, "total": 0, "contar": True}}
+                "paginacion": {"page": 1, "pageSize": 20, "total": 0, "contar": True}}
+    # El servidor siempre trae páginas de 20, así que pedimos la página de 20 que contiene
+    # los resultados solicitados y recortamos.
+    inicio = (pagina - 1) * por_pagina
+    criterio["paginacion"]["page"] = inicio // 20 + 1
     datos = _cc_post("sentencia/100_BUSCR_SNTNCIA", criterio)
-    return datos.get("totalFilas") or 0, [d.get("resolucion") or {} for d in (datos.get("dato") or [])]
+    todos = [d.get("resolucion") or {} for d in (datos.get("dato") or [])]
+    desde = inicio % 20
+    return datos.get("totalFilas") or 0, todos[desde:desde + por_pagina]
 
 
 def cc_legitimados(id_causa):
