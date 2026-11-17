@@ -12,52 +12,38 @@ def get(url, **kw):
     except requests.exceptions.SSLError:
         return S.get(url, timeout=40, verify=False, **kw)
 
-PAL = r"(api|rest|servicio|buscar|busqueda|search|sentencia|consulta|query|juris|filtro|ficha|documento|descarg|pdf|elastic|solr|graphql)"
+def contextos(js, patron, n=6, antes=300, despues=700):
+    for m in list(re.finditer(patron, js))[:n]:
+        print(f"  CTX[{patron}]:", js[max(0, m.start()-antes): m.end()+despues].replace("\n", " "))
 
-def analizar_js(js, etiqueta):
-    print(f"--- {etiqueta} ({len(js)} bytes)")
-    cad = set(re.findall(r'["\'`]([^"\'`\s<>]{3,160})["\'`]', js))
-    utiles = sorted(c for c in cad if ("/" in c or "http" in c) and re.search(PAL, c, re.I)
-                    and not c.startswith(("M", "m0", "@")) and "svg" not in c)
-    for c in utiles[:120]:
-        print("  STR:", c)
-    for patron in [r"\.(post|get|put)\s*\(", r"environment", r"apiUrl|urlApi|baseUrl|urlBase|URL_API|backend", r"https?://"]:
-        for m in list(re.finditer(patron, js))[:8]:
-            print(f"  CTX[{patron[:12]}]:", js[max(0, m.start()-120): m.end()+200].replace("\n", " "))
-
-def sondear(nombre, url, max_archivos=12):
-    print(f"\n######## {nombre}: {url}")
+def todos_js(url, maximo=15):
     r = get(url)
-    base = r.url
-    pendientes = [urljoin(base, s) for s in re.findall(r'<script[^>]+src="([^"]+)"', r.text)]
-    vistos = set()
-    while pendientes and len(vistos) < max_archivos:
-        u = pendientes.pop(0)
+    pend = [urljoin(r.url, s) for s in re.findall(r'<script[^>]+src="([^"]+)"', r.text)]
+    vistos, textos = set(), []
+    while pend and len(vistos) < maximo:
+        u = pend.pop(0)
         if u in vistos or "googletag" in u or "polyfills" in u:
             continue
         vistos.add(u)
         js = get(u).text
-        if len(js) < 400:
-            print("  PEQUEÑO", u, js)
-        for imp in re.findall(r'(?:import|from)\s*\(?\s*["\'](\.?/?[^"\']+\.js)["\']', js):
-            pendientes.append(urljoin(u, imp))
-        analizar_js(js, u)
-    for extra in ["assets/config.json", "assets/env.json", "assets/environment.json", "config.json", "env.js"]:
-        try:
-            rr = get(urljoin(base, extra))
-            if rr.status_code == 200 and len(rr.text) < 5000 and "<html" not in rr.text.lower():
-                print("  EXTRA", extra, rr.text[:800])
-        except Exception:
-            pass
+        textos.append(js)
+        pend += [urljoin(u, i) for i in re.findall(r'(?:import|from)\s*\(?\s*["\'](\.?/?[^"\']+\.js)["\']', js)]
+    return "\n".join(textos)
 
-def sondear_ro():
-    print("\n######## Registro Oficial ?s=")
-    r = get("https://www.registroficial.gob.ec/?s=1964-22-EP")
-    t = r.text
-    i = t.find("1964-22-EP", 2000)
-    print("len", len(t), "pos", i)
-    print(t[max(0, i-3000): i+800] if i > 0 else t[-4000:])
+print("######## CNJ")
+js = todos_js("https://busquedasentencias.cortenacional.gob.ec/")
+for p in [r"MICROSERVICE_BUSCADOR_SENTENCIAS\s*:", r"buscarPorTipoBusqueda", r"grecaptcha|recaptchaToken|siteKey\s*[:=]", r"api\.funcionjudicial"]:
+    contextos(js, p, n=4)
 
-sondear("Corte Constitucional", "https://buscador.corteconstitucional.gob.ec/buscador-externo/principal", 4)
-sondear("Corte Nacional", "https://busquedasentencias.cortenacional.gob.ec/", 15)
-sondear_ro()
+print("\n######## CC")
+js = todos_js("https://buscador.corteconstitucional.gob.ec/buscador-externo/principal", 3)
+for p in [r"gob\.ec", r"production\s*:", r"recaptcha", r"http\.post\(", r"busqueda"]:
+    contextos(js, p, n=5, antes=250, despues=450)
+
+print("\n######## RO búsqueda")
+for q in ["1964-22-EP", "contencioso tributario", "Catamayo"]:
+    t = get("https://www.registroficial.gob.ec/?s=" + q).text
+    i = t.find("cards_container_post_imagen_search")
+    print(f"\n>> q={q} len={len(t)}")
+    print(t[i:i+3500] if i > 0 else "SIN CONTENEDOR")
+    print("PAGINACION:", re.findall(r'href="([^"]*page/\d+/\?s=[^"]*)"', t)[:4])
