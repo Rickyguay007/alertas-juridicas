@@ -303,7 +303,8 @@ SIGLAS = {"SRI", "SENAE", "SERCOP", "IESS", "BIESS", "ARCSA", "ARCOTEL", "ARCONE
           "INEN", "SEPS", "UAFE", "MAE", "MAGP", "CNJ", "GAD", "EP", "ONG", "BCE", "CFN", "SENADI",
           "SENESCYT", "INEC", "MEF", "MDT", "MIES", "MIDUVI", "MTOP", "SNAI", "CNE", "TCE", "CPCCS",
           "COMEX", "AGROCALIDAD", "DMQ", "LOSNCP", "COPCI", "SCVS", "SB", "PGE", "URS", "IEPS",
-          "INEVAL", "MDEP", "MPCEI", "SPDP", "ICCA", "CNEL", "CELEC", "ANT", "ECU", "S.A.", "S.A.S."}
+          "INEVAL", "MDEP", "MPCEI", "SPDP", "ICCA", "CNEL", "CELEC", "ANT", "ECU", "S.A", "S.A.S", "C.A",
+          "E.P", "DMQ", "EPMMOP", "GAD"}
 
 
 def titulo_institucion(nombre):
@@ -441,7 +442,7 @@ def cc_ficha(resolucion, con_partes=True):
         "fecha": fecha,
         "decision": ", ".join(d.get("resumendecision", "").capitalize() for d in resolucion.get("decision") or [] if d.get("resumendecision")),
         "juez": ", ".join(titulo_institucion(j.get("nombrecompleto", "")) for j in resolucion.get("juez") or []),
-        "motivo": limpiar(html.unescape(html.unescape(resolucion.get("motivo") or "")).replace("\u037e", ";").replace(";;", ";")),
+        "motivo": limpiar(html.unescape(html.unescape(resolucion.get("motivo") or "")).replace("\u037e", ";")).replace(";;", ";").replace(";;", ";"),
         "accionante": ", ".join(titulo_institucion(a) for a in activos[:2]) + (f" y {len(activos) - 2} más" if len(activos) > 2 else ""),
         "pdf": cc_pdf(resolucion),
     }
