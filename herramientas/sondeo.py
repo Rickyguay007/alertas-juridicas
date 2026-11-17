@@ -20,14 +20,14 @@ for cid, h in re.findall(r'(\d+):"([0-9a-f]{12,20})"', rt):
     todo += "\n" + get(f"{BASE}{cid}.{h}.js").text
 
 vistos = set()
-for patron in [r"API_ENDPOINT\+", r"API_CONTEXT\.SENTENCIA", r"textoBusqueda|txtBusqueda|criterio\s*:|pagina\s*:|numeroPagina|registrosPorPagina|tamanio"]:
+for patron in [r"buscarSentencia\(", r"parametroBusqueda\.[a-zA-Z]+\s*=", r"parametroBusqueda=\{", r"esTextoValidoParaBusqueda\("]:
     n = 0
     for m in re.finditer(patron, todo):
-        clave = m.start() // 400
+        clave = m.start() // 300
         if clave in vistos:
             continue
         vistos.add(clave)
-        print(f"  CTX[{patron[:25]}]:", todo[max(0, m.start()-350): m.end()+450].replace("\n", " "))
+        print(f"  CTX[{patron[:25]}]:", todo[max(0, m.start()-500): m.end()+900].replace("\n", " "))
         n += 1
-        if n >= 14:
+        if n >= 8:
             break
