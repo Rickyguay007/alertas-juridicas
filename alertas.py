@@ -441,8 +441,8 @@ def cc_ficha(resolucion, con_partes=True):
         "fecha": fecha,
         "decision": ", ".join(d.get("resumendecision", "").capitalize() for d in resolucion.get("decision") or [] if d.get("resumendecision")),
         "juez": ", ".join(titulo_institucion(j.get("nombrecompleto", "")) for j in resolucion.get("juez") or []),
-        "motivo": limpiar(resolucion.get("motivo") or ""),
-        "accionante": ", ".join(activos[:2]) + (f" y {len(activos) - 2} más" if len(activos) > 2 else ""),
+        "motivo": limpiar(html.unescape(html.unescape(resolucion.get("motivo") or "")).replace("\u037e", ";").replace(";;", ";")),
+        "accionante": ", ".join(titulo_institucion(a) for a in activos[:2]) + (f" y {len(activos) - 2} más" if len(activos) > 2 else ""),
         "pdf": cc_pdf(resolucion),
     }
 
