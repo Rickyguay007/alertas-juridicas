@@ -16,19 +16,25 @@ rt = get(BASE + [s for s in src if "runtime" in s][0]).text
 todo = get(BASE + [s for s in src if "main" in s][0]).text
 for cid, h in re.findall(r'(\d+):"([0-9a-f]{12,20})"', rt):
     todo += "\n" + get(f"{BASE}{cid}.{h}.js").text
-for patron in [r"metadata", r"this\.criterioBusqueda=", r"criterioBusqueda\.subBusqueda", r"criterioBusqueda\.textoSentencia="]:
-    for m in list(re.finditer(patron, todo))[:4]:
-        print(f"CTX[{patron}]:", todo[max(0, m.start()-400): m.end()+700].replace("\n", " "))
+for patron in [r"[,;\s]ht=\{", r"[,;\s]it=\{", r"[,;\s]ft=\{"]:
+    for m in list(re.finditer(patron, todo))[:2]:
+        print(f"CTX[{patron}]:", todo[m.start(): m.end()+900].replace("\n", " "))
 
 def cifrar(v):
     return json.dumps({"dato": base64.b64encode(quote(json.dumps(v, separators=(",", ":"), ensure_ascii=False), safe="-_.!~*'()").encode()).decode()})
 
 url = BASE + "rest/api/sentencia/100_BUSCR_SNTNCIA"
 for criterio in [
-    {"textoSentencia": "impuesto a la renta", "numSentencia": "", "numeroCausa": "", "sort": "relevancia",
-     "paginacion": {"page": 1, "pageSize": 5, "total": 0, "contar": True}, "tipoAcciones": [], "jueces": [], "decisiones": []},
-    {"textoSentencia": "", "numSentencia": "1964-22-EP/26", "numeroCausa": "", "sort": "desc",
-     "paginacion": {"page": 1, "pageSize": 5, "total": 0, "contar": True}, "tipoAcciones": [], "jueces": [], "decisiones": []},
+    {"sort": "relevancia", "numSentencia": "", "numeroCausa": "", "textoSentencia": "impuesto a la renta",
+     "legitimados": "", "fechaDecision": "", "decisiones": [], "derechoDemandado": [], "derechosTratado": [],
+     "derechosVulnerado": [], "jueces": [], "tipoAcciones": [], "subBusqueda": "", "materias": [], "intereses": [],
+     "temaEspecificos": [], "conceptos": [], "tipoNormas": [], "precedenteAprobado": "", "precedentePropuesto": "",
+     "asuntos": [], "paginacion": {"page": 1, "pageSize": 5, "total": 0, "contar": True}},
+    dict({"sort": "relevancia", "numSentencia": "", "numeroCausa": "", "textoSentencia": "impuesto a la renta",
+     "legitimados": "", "fechaDecision": "", "decisiones": [], "derechoDemandado": [], "derechosTratado": [],
+     "derechosVulnerado": [], "jueces": [], "tipoAcciones": [], "subBusqueda": "", "materias": [], "intereses": [],
+     "temaEspecificos": [], "conceptos": [], "tipoNormas": [], "precedenteAprobado": "", "precedentePropuesto": "",
+     "asuntos": [], "paginacion": {"page": 1, "pageSize": 5, "total": 0, "contar": True}}, textoSentencia='', numSentencia='1964-22-EP/26', sort='desc'),
 ]:
     r = S.post(url, data=cifrar(criterio), headers={"Content-Type": "application/json; charset=utf-8",
                                                     "Origin": "https://buscador.corteconstitucional.gob.ec",
