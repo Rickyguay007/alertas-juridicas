@@ -3,8 +3,8 @@
 Alertas jurídicas diarias por Telegram (Ecuador).
 
 Revisa cada mañana:
-  - Registro Oficial: Registro Oficial, Suplementos, Edición Constitucional y Edición Jurídica
-    (la Edición Especial se omite porque casi todo es normativa de GADs).
+  - Registro Oficial: Registro Oficial, Suplementos, Edición Constitucional, Edición Jurídica y
+    Edición Especial (de esta última solo lo de los cantones elegidos en CANTONES_GAD).
   - Corte Nacional de Justicia: resoluciones con fuerza de ley y precedentes obligatorios.
   - Corte Constitucional: sentencias publicadas en la Edición Constitucional y, si está
     disponible, las notas de relatoría de su página web.
@@ -47,6 +47,11 @@ DIAS_PRIMERA_VEZ = 2
 
 # Máximo de "otras normas" (instituciones no prioritarias) que se listan por boletín.
 MAX_OTRAS_NORMAS = 25
+
+# Gobiernos locales (GAD): solo se avisa de lo que mencione estos cantones o parroquias.
+# Escríbelos en minúsculas, entre comillas y separados por comas. Ejemplo: ["catamayo", "loja"]
+# Déjalo vacío así [] si no quieres recibir nada de GADs.
+CANTONES_GAD = ["catamayo"]
 
 # Cuántas páginas del listado de suplementos revisar (en días de mucha publicación salen 7 u 8).
 PAGINAS_SUPLEMENTO = 3
@@ -147,6 +152,9 @@ EDICIONES_RO = [
     {"clave": "const", "nombre": "Edición Constitucional", "producto": RO_BASE + "/267099-2/",
      "slugs": ["ediciones-constitucionales", "edicion-constitucional"], "buscar": "constitucional",
      "tipo": "constitucional", "titulo": "edicion constitucional", "paginas": 2},
+    {"clave": "esp", "nombre": "Edición Especial", "producto": RO_BASE + "/261974-2/",
+     "slugs": ["ediciones-especiales", "edicion-especial"], "buscar": "especial",
+     "tipo": "especial", "titulo": "edicion especial", "paginas": 3},
     {"clave": "jur", "nombre": "Edición Jurídica", "producto": RO_BASE + "/266381-2/",
      "slugs": ["ediciones-juridicas", "edicion-juridica", "ediciones-juridica"], "buscar": "jur",
      "tipo": "juridica", "titulo": "edicion juridica", "paginas": 1},
@@ -646,7 +654,8 @@ def novedades_normativa(items, origen, enlace, resultado):
             if "clasifican" in norm(grupo):
                 grupo = "Clasificación arancelaria"
             texto = f"{grupo}: {texto}"
-        if es_ruido(texto):
+        es_decreto = tipo_n.startswith("decreto")
+        if (es_ruido(texto) and not es_decreto) or "condecoracion" in norm(texto):
             resultado.omitidas += 1
             continue
         etiqueta = etiqueta_prioritaria(it["institucion"], it["tipo"])
@@ -664,6 +673,38 @@ def novedades_normativa(items, origen, enlace, resultado):
             resumen=recortar(texto, 300),
             materia=clasificar_materia(texto, it["institucion"]),
             enlace=enlace, origen=origen, etiqueta=etiqueta or ""))
+
+
+def novedades_gad(lineas, origen, enlace, resultado):
+    """Publicaciones de los GADs de los cantones elegidos en CANTONES_GAD."""
+    if not CANTONES_GAD:
+        return
+    patrones = [(c, re.compile(r"\b" + re.escape(norm(c)) + r"\b")) for c in CANTONES_GAD]
+    tipo_actual, ya = "", set()
+    for i, linea in enumerate(lineas):
+        linea = re.sub(r"\s*\.{3,}\s*\d*\s*$", "", linea).strip()
+        if linea.endswith(":") and es_mayusculas(linea) and not any(p.search(norm(linea)) for _, p in patrones):
+            tipo_actual = linea[:-1]
+        encontrado = next((c for c, p in patrones if p.search(norm(linea))), None)
+        if not encontrado:
+            continue
+        resumen = linea.lstrip("-–•· ").strip()
+        if es_mayusculas(linea):  # encabezado tipo "GAD MUNICIPAL DEL CANTÓN CATAMAYO": el detalle va abajo
+            siguientes = [limpiar(l) for l in lineas[i + 1:i + 3] if limpiar(l)]
+            resumen = (titulo_institucion(resumen) + ": " + " ".join(siguientes)).strip(": ")
+        clave = norm(resumen)[:120]
+        if clave in ya:
+            continue
+        ya.add(clave)
+        n = norm(linea)
+        nivel = "Provincial" if "provincial" in n else "Parroquial" if "parroquial" in n else "Municipal"
+        codigo = separar_codigo(resumen)
+        resultado.novedades.append(Novedad(
+            seccion="gad", institucion=f"GAD {nivel} – {encontrado.title()}",
+            numero=codigo[0] if codigo else (titulo_institucion(tipo_actual) or "Publicación"),
+            resumen=recortar(codigo[1] if codigo else resumen, 300),
+            materia=clasificar_materia(resumen, defecto="Régimen local 🏘️"),
+            enlace=enlace, origen=origen))
 
 
 def novedades_constitucional(items, origen, enlace, resultado):
@@ -754,6 +795,8 @@ def revisar_registro_oficial(estado, desde, resultado):
     vistos = set(estado.get("vistos", {}).get("registro_oficial", []))
     nuevos_ids = []
     for edicion in EDICIONES_RO:
+        if edicion["tipo"] == "especial" and not CANTONES_GAD:
+            continue
         nombre_fuente = f"Registro Oficial – {edicion['nombre']}"
         notas = []
         try:
@@ -823,6 +866,7 @@ def revisar_registro_oficial(estado, desde, resultado):
                     novedades_constitucional(analizar_sumario(lineas), origen, enlace, resultado)
                 else:
                     novedades_normativa(analizar_sumario(lineas), origen, enlace, resultado)
+                    novedades_gad(lineas, origen, enlace, resultado)
                 nuevos_ids.append(url_post)
                 time.sleep(1)
             detalle = (f"{len(posts)} ediciones en el listado, {len(candidatos)} nuevas, "
@@ -993,6 +1037,7 @@ def armar_mensajes(resultado, primera_vez, fecha):
         ("cc", "👨‍⚖️ <b>CORTE CONSTITUCIONAL</b>", "Corte Constitucional"),
         ("cnj", "⚖️ <b>CORTE NACIONAL DE JUSTICIA</b>", "Corte Nacional"),
         ("prioritaria", "📰 <b>REGISTRO OFICIAL · Instituciones clave</b>", "Instituciones clave"),
+        ("gad", "🏘️ <b>GAD · " + esc(", ".join(c.title() for c in CANTONES_GAD)).upper() + "</b>", "GAD"),
         ("otras", "📋 <b>OTRAS NORMAS RELEVANTES</b>", "Otras normas"),
     ]
     encabezado = f"📚 <b>Boletín jurídico</b>\n🗓️ {fecha_larga(fecha).capitalize()}"
@@ -1004,7 +1049,7 @@ def armar_mensajes(resultado, primera_vez, fecha):
             return []
         texto = encabezado + "\n\n😌 Hoy no hay novedades relevantes en las fuentes revisadas."
         if resultado.omitidas:
-            texto += f"\n🔕 Se omitieron {resultado.omitidas} publicaciones de trámite (estatutos, delegaciones, GADs…)."
+            texto += f"\n🔕 Se omitieron {resultado.omitidas} publicaciones de trámite (estatutos, delegaciones, otros GADs…)."
         if resultado.errores:
             texto += "\n\n⚠️ No pude revisar: " + esc(", ".join(resultado.errores))
         return [texto]
@@ -1029,7 +1074,7 @@ def armar_mensajes(resultado, primera_vez, fecha):
             bloques.append(f"➕ Y {sobrantes} norma(s) más en el Registro Oficial de hoy.")
     pie = []
     if resultado.omitidas:
-        pie.append(f"🔕 Se omitieron {resultado.omitidas} publicaciones de trámite (estatutos, delegaciones, GADs…).")
+        pie.append(f"🔕 Se omitieron {resultado.omitidas} publicaciones de trámite (estatutos, delegaciones, otros GADs…).")
     if resultado.errores:
         pie.append("⚠️ No pude revisar: " + esc(", ".join(resultado.errores)))
     if pie:
