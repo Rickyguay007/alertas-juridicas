@@ -16,9 +16,17 @@ rt = get(BASE + [s for s in src if "runtime" in s][0]).text
 todo = get(BASE + [s for s in src if "main" in s][0]).text
 for cid, h in re.findall(r'(\d+):"([0-9a-f]{12,20})"', rt):
     todo += "\n" + get(f"{BASE}{cid}.{h}.js").text
-for patron in [r"[,;\s]ht=\{", r"[,;\s]it=\{", r"[,;\s]ft=\{"]:
-    for m in list(re.finditer(patron, todo))[:2]:
-        print(f"CTX[{patron}]:", todo[m.start(): m.end()+900].replace("\n", " "))
+import itertools
+for patron in [r"intercept\(", r"[\"']metadata[\"']|\.metadata\b|metadata:", r"btoa\(", r"setHeaders|headers\.set\("]:
+    n = 0
+    for m in re.finditer(patron, todo):
+        ctx = todo[max(0, m.start()-300): m.end()+600].replace("\n", " ")
+        if "ngMetadataName" in ctx or "this.metadata.flags" in ctx or "prop__metadata" in ctx or "metadata.predicate" in ctx or "metadata.read" in ctx:
+            continue
+        print(f"CTX[{patron[:20]}]:", ctx)
+        n += 1
+        if n >= 8:
+            break
 
 def cifrar(v):
     return json.dumps({"dato": base64.b64encode(quote(json.dumps(v, separators=(",", ":"), ensure_ascii=False), safe="-_.!~*'()").encode()).decode()})
