@@ -1294,6 +1294,13 @@ def principal():
     primera_vez = not estado.get("ultima_revision")
     ahora = dt.datetime.now(ZONA_EC)
     hoy = ahora.date()
+
+    # GitHub a veces se salta el horario, por eso hay varios turnos de respaldo en la mañana.
+    # Si el boletín de hoy ya salió, los turnos automáticos siguientes no hacen nada.
+    automatico = os.environ.get("GITHUB_EVENT_NAME") == "schedule"
+    if automatico and not primera_vez and estado["ultima_revision"][:10] == hoy.isoformat():
+        log.info("El boletín de hoy ya se envió (%s); este turno de respaldo no hace nada.", estado["ultima_revision"])
+        return
     if primera_vez:
         desde = hoy - dt.timedelta(days=DIAS_PRIMERA_VEZ)
     else:
