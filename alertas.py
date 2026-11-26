@@ -1295,9 +1295,10 @@ def principal():
     ahora = dt.datetime.now(ZONA_EC)
     hoy = ahora.date()
 
-    # GitHub a veces se salta el horario, por eso hay varios turnos de respaldo en la mañana.
-    # Si el boletín de hoy ya salió, los turnos automáticos siguientes no hacen nada.
-    automatico = os.environ.get("GITHUB_EVENT_NAME") == "schedule"
+    # El boletín lo lanza cron-job.org a las 8:15 (con AUTOMATICO=si) y GitHub tiene turnos de
+    # respaldo. Si el boletín de hoy ya salió, los turnos automáticos siguientes no hacen nada.
+    automatico = (os.environ.get("GITHUB_EVENT_NAME") == "schedule"
+                  or os.environ.get("AUTOMATICO", "").lower() in ("si", "sí", "true", "1"))
     if automatico and not primera_vez and estado["ultima_revision"][:10] == hoy.isoformat():
         log.info("El boletín de hoy ya se envió (%s); este turno de respaldo no hace nada.", estado["ultima_revision"])
         return

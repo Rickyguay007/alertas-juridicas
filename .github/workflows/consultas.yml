@@ -2,10 +2,9 @@ name: Consultas del bot
 
 on:
   schedule:
-    # Cada 20 minutos de 6:00 a 22:40 hora de Ecuador (11:00–03:40 UTC).
-    # Minutos "raros" (3, 23, 43) porque GitHub se satura y salta más turnos en :00, :20 y :40.
-    - cron: "3,23,43 11-23 * * *"
-    - cron: "3,23,43 0-3 * * *"
+    # El turno principal lo da cron-job.org cada 5 minutos. Este horario de GitHub es solo
+    # un respaldo (GitHub lo retrasa y se salta turnos).
+    - cron: "3,23,43 * * * *"
   workflow_dispatch:
     inputs:
       consulta:

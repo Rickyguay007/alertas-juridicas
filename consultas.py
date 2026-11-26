@@ -2,8 +2,8 @@
 """
 Responde las búsquedas que le escribes al bot en Telegram.
 
-GitHub lo corre cada 20 minutos (de 6:00 a 23:00 hora de Ecuador): lee los mensajes
-pendientes, busca y contesta. Por eso la respuesta puede tardar hasta unos 20 minutos.
+cron-job.org lo lanza cada 5 minutos (con respaldo en el horario de GitHub): lee los mensajes
+pendientes, busca y contesta. Por eso la respuesta puede tardar unos 5 minutos.
 
 Qué entiende:
   /cc texto o número   -> sentencias de la Corte Constitucional (ej. /cc impuesto a la renta, /cc 1964-22-EP/26)
@@ -34,7 +34,7 @@ NUMEROS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7�
 
 AYUDA = """🤖 <b>¿Cómo buscar?</b>
 
-Escríbeme lo que necesitas y te respondo en unos minutos (reviso los mensajes cada 20 minutos, de 6:00 a 23:00).
+Escríbeme lo que necesitas y te respondo en unos minutos (reviso los mensajes cada 5 minutos).
 
 👨‍⚖️ <b>/cc</b> + texto o número → sentencias de la Corte Constitucional
    • <code>/cc anticipo impuesto a la renta</code>

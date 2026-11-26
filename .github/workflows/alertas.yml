@@ -2,9 +2,10 @@ name: Alertas jurídicas
 
 on:
   schedule:
-    # Hora de Ecuador = UTC - 5. El turno principal es a las 8:13 (13:13 UTC).
-    # GitHub a veces se salta turnos, así que hay respaldos a las 8:37, 9:07, 9:53 y 11:21.
-    # Solo el primero que corra envía el boletín; los demás ven que ya salió y no hacen nada.
+    # El turno principal lo da cron-job.org a las 8:15 de Ecuador (GitHub retrasa sus horarios
+    # varias horas). Estos son respaldos por si cron-job.org falla; están en hora UTC
+    # (Ecuador = UTC - 5): 4:07, 5:37, 6:07, 6:47 y 8:13. Solo el primero que corra envía
+    # el boletín; los demás ven que ya salió y no hacen nada.
     - cron: "7 9 * * *"
     - cron: "37 10 * * *"
     - cron: "7 11 * * *"
@@ -21,6 +22,10 @@ on:
           - normal
           - diagnostico
           - prueba
+      automatico:
+        description: "si = orden automática (cron-job.org): no reenvía si el boletín de hoy ya salió"
+        required: false
+        default: "no"
 
 permissions:
   contents: write
@@ -51,6 +56,7 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           MODO: ${{ github.event.inputs.modo || 'normal' }}
+          AUTOMATICO: ${{ github.event.inputs.automatico || 'no' }}
         run: python alertas.py
 
       - name: Guardar lo ya avisado
